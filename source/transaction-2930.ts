@@ -1,5 +1,7 @@
-import { rlpEncode } from "@zoltu/rlp-encoder"
-import { addressBigintToHex, bigintToBytes, bigintToHex, bytesToHex, hexToBigint, hexToBytes } from "./converters.js"
+import { RlpItem, rlpDecode, rlpEncode } from "@zoltu/rlp-encoder"
+import { addressBigintToHex, bigintToHex, bytesToBigint, bytesToHex, hexToBigint, hexToBytes } from "./converters.js"
+import { isArray } from "./typescript.js"
+import { encodeAddressForRlp, encodeHashForRlp, encodeNumberForRlp } from "./transaction.js"
 
 export type Transaction2930Unsigned = {
 	readonly type: '2930'
@@ -7,7 +9,7 @@ export type Transaction2930Unsigned = {
 	readonly nonce: bigint
 	readonly gasPrice: bigint
 	readonly gasLimit: bigint
-	readonly to: bigint
+	readonly to: bigint | null
 	readonly value: bigint
 	readonly data: Uint8Array
 	readonly accessList: [bigint, bigint[]][]
@@ -25,7 +27,7 @@ export type JsonTransaction2930Unsigned = {
 	readonly nonce: string
 	readonly gasPrice: string
 	readonly gasLimit: string
-	readonly to: string
+	readonly to: string | null
 	readonly value: string
 	readonly data: string
 	readonly accessList: [string, string[]][]
@@ -41,33 +43,21 @@ export function serializeTransaction2930(transaction: Transaction2930Unsigned): 
 export function serializeTransaction2930(transaction: Transaction2930Signed): JsonTransaction2930Signed
 export function serializeTransaction2930(transaction: Transaction2930): JsonTransaction2930
 export function serializeTransaction2930(transaction: Transaction2930): JsonTransaction2930 {
-	if ('yParity' in transaction && typeof transaction.yParity === 'bigint') {
-		return {
-			type: '2930',
-			chainId: bigintToHex(transaction.chainId),
-			nonce: bigintToHex(transaction.nonce),
-			gasPrice: bigintToHex(transaction.gasPrice),
-			gasLimit: bigintToHex(transaction.gasLimit),
-			to: addressBigintToHex(transaction.to),
-			value: bigintToHex(transaction.value),
-			data: bytesToHex(transaction.data),
-			accessList: transaction.accessList.map(x => [bigintToHex(x[0]), x[1].map(y => bigintToHex(y))]),
+	return {
+		type: '2930',
+		chainId: bigintToHex(transaction.chainId),
+		nonce: bigintToHex(transaction.nonce),
+		gasPrice: bigintToHex(transaction.gasPrice),
+		gasLimit: bigintToHex(transaction.gasLimit),
+		to: transaction.to === null ? null : addressBigintToHex(transaction.to),
+		value: bigintToHex(transaction.value),
+		data: bytesToHex(transaction.data),
+		accessList: transaction.accessList.map(([address, storageKeys]) => [addressBigintToHex(address), storageKeys.map(slot => bigintToHex(slot, 32))]),
+		...isSigned(transaction) ? {
 			yParity: bigintToHex(transaction.yParity),
 			r: bigintToHex(transaction.r),
 			s: bigintToHex(transaction.s),
-		}
-	} else {
-		return {
-			type: '2930',
-			chainId: bigintToHex(transaction.chainId),
-			nonce: bigintToHex(transaction.nonce),
-			gasPrice: bigintToHex(transaction.gasPrice),
-			gasLimit: bigintToHex(transaction.gasLimit),
-			to: addressBigintToHex(transaction.to),
-			value: bigintToHex(transaction.value),
-			data: bytesToHex(transaction.data),
-			accessList: transaction.accessList.map(x => [bigintToHex(x[0]), x[1].map(y => bigintToHex(y))]),
-		}
+		} : {}
 	}
 }
 
@@ -75,60 +65,92 @@ export function deserializeTransaction2930(transaction: JsonTransaction2930Unsig
 export function deserializeTransaction2930(transaction: JsonTransaction2930Signed): Transaction2930Signed
 export function deserializeTransaction2930(transaction: JsonTransaction2930): Transaction2930
 export function deserializeTransaction2930(transaction: JsonTransaction2930): Transaction2930 {
-	if ('yParity' in transaction && typeof transaction.yParity === 'string') {
-		return {
-			type: '2930',
-			chainId: hexToBigint(transaction.chainId),
-			nonce: hexToBigint(transaction.nonce),
-			gasPrice: hexToBigint(transaction.gasPrice),
-			gasLimit: hexToBigint(transaction.gasLimit),
-			to: hexToBigint(transaction.to),
-			value: hexToBigint(transaction.value),
-			data: hexToBytes(transaction.data),
-			accessList: transaction.accessList.map(x => [hexToBigint(x[0]), x[1].map(y => hexToBigint(y))]),
+	return {
+		type: '2930',
+		chainId: hexToBigint(transaction.chainId),
+		nonce: hexToBigint(transaction.nonce),
+		gasPrice: hexToBigint(transaction.gasPrice),
+		gasLimit: hexToBigint(transaction.gasLimit),
+		to: transaction.to === null ? null : hexToBigint(transaction.to),
+		value: hexToBigint(transaction.value),
+		data: hexToBytes(transaction.data),
+		accessList: transaction.accessList.map(x => [hexToBigint(x[0]), x[1].map(y => hexToBigint(y))]),
+		...isSigned(transaction) ? {
 			yParity: hexToBigint(transaction.yParity),
 			r: hexToBigint(transaction.r),
 			s: hexToBigint(transaction.s),
-		}
-	} else {
-		return {
-			type: '2930',
-			chainId: hexToBigint(transaction.chainId),
-			nonce: hexToBigint(transaction.nonce),
-			gasPrice: hexToBigint(transaction.gasPrice),
-			gasLimit: hexToBigint(transaction.gasLimit),
-			to: hexToBigint(transaction.to),
-			value: hexToBigint(transaction.value),
-			data: hexToBytes(transaction.data),
-			accessList: transaction.accessList.map(x => [hexToBigint(x[0]), x[1].map(y => hexToBigint(y))]),
-		}
+		} : {}
 	}
 }
 
 export function encodeTransaction2930(transaction: Transaction2930): Uint8Array {
-	const toEncode = ('yParity' in transaction && typeof transaction.yParity === 'bigint')
-		? [
-			bigintToBytes(transaction.chainId),
-			bigintToBytes(transaction.nonce),
-			bigintToBytes(transaction.gasPrice),
-			bigintToBytes(transaction.gasLimit),
-			transaction.to !== null ? bigintToBytes(transaction.to, 20) : new Uint8Array(0),
-			bigintToBytes(transaction.value),
-			transaction.data,
-			transaction.accessList.map(([address, storageKeys]) => [bigintToBytes(address, 20), storageKeys.map(slot => bigintToBytes(slot, 32))]),
-			bigintToBytes(transaction.yParity),
-			bigintToBytes(transaction.r),
-			bigintToBytes(transaction.s),
-		]
-		: [
-			bigintToBytes(transaction.chainId),
-			bigintToBytes(transaction.nonce),
-			bigintToBytes(transaction.gasPrice),
-			bigintToBytes(transaction.gasLimit),
-			transaction.to !== null ? bigintToBytes(transaction.to, 20) : new Uint8Array(0),
-			bigintToBytes(transaction.value),
-			transaction.data,
-			transaction.accessList.map(([address, storageKeys]) => [bigintToBytes(address, 20), storageKeys.map(slot => bigintToBytes(slot, 32))]),
-		]
+	const toEncode = [
+		encodeNumberForRlp(transaction.chainId),
+		encodeNumberForRlp(transaction.nonce),
+		encodeNumberForRlp(transaction.gasPrice),
+		encodeNumberForRlp(transaction.gasLimit),
+		transaction.to !== null ? encodeAddressForRlp(transaction.to) : new Uint8Array(0),
+		encodeNumberForRlp(transaction.value),
+		transaction.data,
+		transaction.accessList.map(([address, storageKeys]) => [encodeAddressForRlp(address), storageKeys.map(slot => encodeHashForRlp(slot))]),
+		...isSigned(transaction) ? [
+			encodeNumberForRlp(transaction.yParity),
+			encodeNumberForRlp(transaction.r),
+			encodeNumberForRlp(transaction.s),
+		] : []
+	]
 	return new Uint8Array([1, ...rlpEncode(toEncode)])
+}
+
+type UnsignedShape = [Uint8Array, Uint8Array, Uint8Array, Uint8Array, Uint8Array, Uint8Array, Uint8Array, [Uint8Array, Uint8Array[]][]]
+type SignedShape = [...UnsignedShape, Uint8Array, Uint8Array, Uint8Array]
+export function decodeTransaction2930(encoded: Uint8Array): Transaction2930 {
+	function assertStructure(list: readonly RlpItem[]): asserts list is UnsignedShape | SignedShape {
+		if (list.length !== 8 && list.length !== 11) throw new Error(`Expected an encoded 2930 transaction which is an RLP list of either 8 or 11 items but decoded a list of ${list.length} items.`)
+		for (let i = 0; i < list.length; ++i) {
+			if (i !== 7 && isArray(list[i])) throw new Error(`Expected an encoded 2930 transaction with a byte array in position ${i} but decoded a list.`)
+			if (i === 7 && list[i] instanceof Uint8Array) throw new Error(`Expected an encoded 2930 transaction with an accessList in position 7 but decoded a byte array.`)
+		}
+	}
+	function isSigned(list: UnsignedShape | SignedShape): list is SignedShape {
+		return list.length === 11
+	}
+	const decoded = rlpDecode(encoded.slice(1))
+	if (!isArray(decoded)) throw new Error(`Expected an encoded 2930 transaction which is an RLP list of items but got something that was just a single encoded item.`)
+	assertStructure(decoded)
+	return {
+		type: '2930',
+		chainId: bytesToBigint(decoded[0]),
+		nonce: bytesToBigint(decoded[1]),
+		gasPrice: bytesToBigint(decoded[2]),
+		gasLimit: bytesToBigint(decoded[3]),
+		to: (decoded[4].length === 0) ? null : bytesToBigint(decoded[4]),
+		value: bytesToBigint(decoded[5]),
+		data: decoded[6],
+		accessList: decoded[7].map(tuple => [bytesToBigint(tuple[0]), tuple[1].map(storageKey => bytesToBigint(storageKey))]),
+		...isSigned(decoded) ? {
+			yParity: bytesToBigint(decoded[8]),
+			r: bytesToBigint(decoded[9]),
+			s: bytesToBigint(decoded[10]),
+		} : {}
+	}
+}
+
+function isSigned(transaction: JsonTransaction2930): transaction is JsonTransaction2930Signed
+function isSigned(transaction: Transaction2930): transaction is Transaction2930Signed
+function isSigned(transaction: JsonTransaction2930 | Transaction2930): transaction is JsonTransaction2930Signed | Transaction2930Signed {
+	if (!('yParity' in transaction)) return false
+	if (!('r' in transaction)) return false
+	if (!('s' in transaction)) return false
+	if (typeof transaction.yParity === 'string') {
+		if (typeof transaction.r !== 'string') return false
+		if (typeof transaction.s !== 'string') return false
+		return true
+	} else if (typeof transaction.yParity === 'bigint') {
+		if (typeof transaction.r === 'bigint') return false
+		if (typeof transaction.s === 'bigint') return false
+		return true
+	} else {
+		return false
+	}
 }

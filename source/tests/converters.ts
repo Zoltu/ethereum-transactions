@@ -1,22 +1,6 @@
 import { describe, should } from 'micro-should'
 import { addressBigintToHex, addressHexToBigint, bigintToBytes, bytesToBigint } from '../converters.js'
-
-function assertEqual(expected: unknown, actual: unknown): void {
-	if (typeof expected !== typeof actual) throw new Error(`Equality check failed on types.\nExpected type: ${typeof expected}\nActual type  : ${typeof actual}`)
-	if (expected instanceof Uint8Array) {
-		if (!(actual instanceof Uint8Array)) throw new Error(`Equality check on Uint8Array type failed.\nExpected: Uint8Array\nActual  : ${typeof actual}.`)
-		return assertEqual(Array.from(expected), Array.from(actual))
-	}
-	if (Array.isArray(expected)) {
-		if (!Array.isArray(actual)) throw new Error(`Equality check on array type failed.\nExpected ${actual} to be an array.`)
-		if (expected.length !== actual.length) throw new Error()
-		for (let i = 0; i < expected.length; ++i) {
-			if (expected[i] !== actual[i]) throw new Error(`Equality check of array elements failed.\nExpected: ${JSON.stringify(expected)}\nActual  : ${JSON.stringify(actual)}`)
-		}
-		return
-	}
-	if (expected !== actual) throw new Error(`Equality check failed.\nExpected: ${actual}\nActual  : ${expected}`)
-}
+import { assertEqual } from './utils.js'
 
 describe('bytesToBigint', () => {
 	[

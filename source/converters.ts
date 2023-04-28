@@ -35,12 +35,13 @@ export function bigintToHex(value: bigint, numberOfBytes?: number): `0x${string}
 }
 
 export function hexToBigint(value: string) {
+	if (value === '0x') return 0n
 	if (!/^0x[a-fA-F0-9]+$/.test(value)) throw new Error(`Expected a hex encoded number but got ${value}`)
 	return BigInt(value)
 }
 
 export function hexToBytes(value: string) {
-	if (!/^0x[a-fA-F0-9]+$/.test(value)) throw new Error(`Expected a hex encoded number but got ${value}`)
+	if (!/^0x[a-fA-F0-9]*$/.test(value)) throw new Error(`Expected a hex encoded byte array but got ${value}`)
 	if (value.length % 2 !== 0) throw new Error(`Expected an even number of nibbles but found ${value.length - 2} nibbles.`)
 	const result = new Uint8Array((value.length - 2) / 2)
 	for (let i = 0; i < result.length; ++i) {

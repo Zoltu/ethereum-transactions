@@ -1,12 +1,14 @@
-import { rlpEncode } from "@zoltu/rlp-encoder"
-import { addressBigintToHex, bigintToBytes, bigintToHex, bytesToHex, hexToBigint, hexToBytes } from "./converters.js"
+import { RlpItem, rlpDecode, rlpEncode } from "@zoltu/rlp-encoder"
+import { addressBigintToHex, bigintToHex, bytesToBigint, bytesToHex, hexToBigint, hexToBytes } from "./converters.js"
+import { isArray } from "./typescript.js"
+import { encodeAddressForRlp, encodeNumberForRlp } from "./transaction.js"
 
 export type TransactionLegacyUnsigned = {
 	readonly type: 'legacy'
 	readonly nonce: bigint
 	readonly gasPrice: bigint
 	readonly gasLimit: bigint
-	readonly to: bigint
+	readonly to: bigint | null
 	readonly value: bigint
 	readonly data: Uint8Array
 }
@@ -22,7 +24,7 @@ export type JsonTransactionLegacyUnsigned = {
 	readonly nonce: string
 	readonly gasPrice: string
 	readonly gasLimit: string
-	readonly to: string
+	readonly to: string | null
 	readonly value: string
 	readonly data: string
 }
@@ -37,29 +39,19 @@ export function serializeTransactionLegacy(transaction: TransactionLegacyUnsigne
 export function serializeTransactionLegacy(transaction: TransactionLegacySigned): JsonTransactionLegacySigned
 export function serializeTransactionLegacy(transaction: TransactionLegacy): JsonTransactionLegacy
 export function serializeTransactionLegacy(transaction: TransactionLegacy): JsonTransactionLegacy {
-	if ('v' in transaction && typeof transaction.v === 'bigint') {
-		return {
-			type: 'legacy',
-			nonce: bigintToHex(transaction.nonce),
-			gasPrice: bigintToHex(transaction.gasPrice),
-			gasLimit: bigintToHex(transaction.gasLimit),
-			to: addressBigintToHex(transaction.to),
-			value: bigintToHex(transaction.value),
-			data: bytesToHex(transaction.data),
+	return {
+		type: 'legacy',
+		nonce: bigintToHex(transaction.nonce),
+		gasPrice: bigintToHex(transaction.gasPrice),
+		gasLimit: bigintToHex(transaction.gasLimit),
+		to: transaction.to === null ? null : addressBigintToHex(transaction.to),
+		value: bigintToHex(transaction.value),
+		data: bytesToHex(transaction.data),
+		...isSigned(transaction) ? {
 			v: bigintToHex(transaction.v),
 			r: bigintToHex(transaction.r),
 			s: bigintToHex(transaction.s),
-		}
-	} else {
-		return {
-			type: 'legacy',
-			nonce: bigintToHex(transaction.nonce),
-			gasPrice: bigintToHex(transaction.gasPrice),
-			gasLimit: bigintToHex(transaction.gasLimit),
-			to: addressBigintToHex(transaction.to),
-			value: bigintToHex(transaction.value),
-			data: bytesToHex(transaction.data),
-		}
+		} : {}
 	}
 }
 
@@ -67,52 +59,84 @@ export function deserializeTransactionLegacy(transaction: JsonTransactionLegacyU
 export function deserializeTransactionLegacy(transaction: JsonTransactionLegacySigned): TransactionLegacySigned
 export function deserializeTransactionLegacy(transaction: JsonTransactionLegacy): TransactionLegacy
 export function deserializeTransactionLegacy(transaction: JsonTransactionLegacy): TransactionLegacy {
-	if ('v' in transaction && typeof transaction.v === 'string') {
-		return {
-			type: 'legacy',
-			nonce: hexToBigint(transaction.nonce),
-			gasPrice: hexToBigint(transaction.gasPrice),
-			gasLimit: hexToBigint(transaction.gasLimit),
-			to: hexToBigint(transaction.to),
-			value: hexToBigint(transaction.value),
-			data: hexToBytes(transaction.data),
+	return {
+		type: 'legacy',
+		nonce: hexToBigint(transaction.nonce),
+		gasPrice: hexToBigint(transaction.gasPrice),
+		gasLimit: hexToBigint(transaction.gasLimit),
+		to: transaction.to === null ? null : hexToBigint(transaction.to),
+		value: hexToBigint(transaction.value),
+		data: hexToBytes(transaction.data),
+		...isSigned(transaction) ? {
 			v: hexToBigint(transaction.v),
 			r: hexToBigint(transaction.r),
 			s: hexToBigint(transaction.s),
-		}
-	} else {
-		return {
-			type: 'legacy',
-			nonce: hexToBigint(transaction.nonce),
-			gasPrice: hexToBigint(transaction.gasPrice),
-			gasLimit: hexToBigint(transaction.gasLimit),
-			to: hexToBigint(transaction.to),
-			value: hexToBigint(transaction.value),
-			data: hexToBytes(transaction.data),
-		}
+		} : {}
 	}
 }
 
 export function encodeTransactionLegacy(transaction: TransactionLegacy): Uint8Array {
-	const toEncode = ('v' in transaction && typeof transaction.v === 'bigint')
-		? [
-			bigintToBytes(transaction.nonce),
-			bigintToBytes(transaction.gasPrice),
-			bigintToBytes(transaction.gasLimit),
-			transaction.to !== null ? bigintToBytes(transaction.to, 20) : new Uint8Array(0),
-			bigintToBytes(transaction.value),
-			transaction.data,
-			bigintToBytes(transaction.v),
-			bigintToBytes(transaction.r),
-			bigintToBytes(transaction.s),
-		]
-		: [
-			bigintToBytes(transaction.nonce),
-			bigintToBytes(transaction.gasPrice),
-			bigintToBytes(transaction.gasLimit),
-			transaction.to !== null ? bigintToBytes(transaction.to, 20) : new Uint8Array(0),
-			bigintToBytes(transaction.value),
-			transaction.data,
-		]
+	const toEncode = [
+		encodeNumberForRlp(transaction.nonce),
+		encodeNumberForRlp(transaction.gasPrice),
+		encodeNumberForRlp(transaction.gasLimit),
+		transaction.to !== null ? encodeAddressForRlp(transaction.to) : new Uint8Array(0),
+		encodeNumberForRlp(transaction.value),
+		transaction.data,
+		...isSigned(transaction) ? [
+			encodeNumberForRlp(transaction.v),
+			encodeNumberForRlp(transaction.r),
+			encodeNumberForRlp(transaction.s),
+		] : []
+	]
 	return rlpEncode(toEncode)
+}
+
+type UnsignedShape = [Uint8Array, Uint8Array, Uint8Array, Uint8Array, Uint8Array, Uint8Array]
+type SignedShape = [...UnsignedShape, Uint8Array, Uint8Array, Uint8Array]
+export function decodeTransactionLegacy(encoded: Uint8Array): TransactionLegacy {
+	function assertStructure(list: readonly RlpItem[]): asserts list is UnsignedShape | SignedShape {
+		if (list.length !== 6 && decoded.length !== 9) throw new Error(`Expected an encoded legacy transaction which is an RLP list of either 8 or 11 items but decoded a list of ${list.length} items.`)
+		list.forEach((item, index) => { if (isArray(item)) throw new Error(`Expected an encoded legacy transaction with a byte array in position ${index} but decoded a list.`) })
+	}
+	function isSigned(list: UnsignedShape | SignedShape): list is SignedShape {
+		return list.length === 9
+	}
+
+	const decoded = rlpDecode(encoded)
+	if (!isArray(decoded)) throw new Error(`Expected an encoded legacy transaction which is an RLP list of items but got something that was just a single encoded item.`)
+	assertStructure(decoded)
+	return {
+		type: 'legacy',
+		nonce: bytesToBigint(decoded[0]),
+		gasPrice: bytesToBigint(decoded[1]),
+		gasLimit: bytesToBigint(decoded[2]),
+		to: (decoded[3].length === 0) ? null : bytesToBigint(decoded[3]),
+		value: bytesToBigint(decoded[4]),
+		data: decoded[5],
+		...isSigned(decoded) ? {
+			v: bytesToBigint(decoded[6]),
+			r: bytesToBigint(decoded[7]),
+			s: bytesToBigint(decoded[8]),
+		} : {}
+	}
+}
+
+function isSigned(transaction: JsonTransactionLegacy): transaction is JsonTransactionLegacySigned
+function isSigned(transaction: TransactionLegacy): transaction is TransactionLegacySigned
+function isSigned(transaction: JsonTransactionLegacy | TransactionLegacy): transaction is JsonTransactionLegacySigned | TransactionLegacySigned {
+	if (!('v' in transaction)) return false
+	if (!('r' in transaction)) return false
+	if (!('s' in transaction)) return false
+	if (typeof transaction.v === 'string') {
+		if (typeof transaction.r !== 'string') return false
+		if (typeof transaction.s !== 'string') return false
+		return true
+	} else if (typeof transaction.v === 'bigint') {
+		if (typeof transaction.r === 'bigint') return false
+		if (typeof transaction.s === 'bigint') return false
+		return true
+	} else {
+		return false
+	}
 }

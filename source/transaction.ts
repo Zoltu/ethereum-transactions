@@ -1,10 +1,9 @@
-import { rlpDecode } from '@zoltu/rlp-encoder'
-import { JsonTransaction155, Transaction155, deserializeTransaction155, encodeTransaction155, serializeTransaction155 } from './transaction-155.js'
-import { JsonTransaction1559, Transaction1559, deserializeTransaction1559, encodeTransaction1559, serializeTransaction1559 } from './transaction-1559.js'
-import { JsonTransaction2930, Transaction2930, deserializeTransaction2930, encodeTransaction2930, serializeTransaction2930 } from './transaction-2930.js'
-import { JsonTransactionLegacy, TransactionLegacy, deserializeTransactionLegacy, encodeTransactionLegacy, serializeTransactionLegacy } from './transaction-legacy.js'
-import { DistributedOmit, assertNever, isArray } from './typescript.js'
-import { bytesToBigint } from './converters.js'
+import { bigintToBytes } from './converters.js'
+import { JsonTransaction155, Transaction155, decodeTransaction155, deserializeTransaction155, encodeTransaction155, isEncodedTransaction155, serializeTransaction155 } from './transaction-155.js'
+import { JsonTransaction1559, Transaction1559, decodeTransaction1559, deserializeTransaction1559, encodeTransaction1559, serializeTransaction1559 } from './transaction-1559.js'
+import { JsonTransaction2930, Transaction2930, decodeTransaction2930, deserializeTransaction2930, encodeTransaction2930, serializeTransaction2930 } from './transaction-2930.js'
+import { JsonTransactionLegacy, TransactionLegacy, decodeTransactionLegacy, deserializeTransactionLegacy, encodeTransactionLegacy, serializeTransactionLegacy } from './transaction-legacy.js'
+import { DistributedOmit, assertNever } from './typescript.js'
 
 export * from './transaction-legacy.js'
 export * from './transaction-155.js'
@@ -73,24 +72,26 @@ export function encodeTransaction(transaction: Transaction): Uint8Array {
 	}
 }
 
-export function decodeTransaction(transaction: Uint8Array): Transaction {
-	if (transaction.length === 0) throw new Error(`Expected an encoded transaction but got an empty byte array.`)
-	switch (transaction[0]) {
-		case 2: return decodeTransaction1559(transaction)
-		case 1: return decodeTransaction2930(transaction)
+export function decodeTransaction(encodedTransaction: Uint8Array): Transaction {
+	if (encodedTransaction.length === 0) throw new Error(`Expected an encoded transaction but got an empty byte array.`)
+	switch (encodedTransaction[0]) {
+		case 2: return decodeTransaction1559(encodedTransaction)
+		case 1: return decodeTransaction2930(encodedTransaction)
 		default: {
-			if (transaction[0]! < 0xc0) throw new Error(`Expected an encoded transaction but first byte is not an expected transaction type or legacy transaction RLP byte.`)
-			const decoded = rlpDecode(transaction)
-			if (!isArray(decoded)) throw new Error(`Expected an RLP encoded list but got a single RLP encoded item.`)
-			if (decoded.length === 6) return decodeTransactionLegacy(transaction)
-			if (decoded.length !== 9) throw new Error(`Expected an RLP encoded list of 9 items but got ${decoded.length} items.`)
-			if (!(decoded[7] instanceof Uint8Array)) throw new Error(`Expected the 7th item of the RLP encoded transaction to be an item but it was a list.`)
-			if (!(decoded[8] instanceof Uint8Array)) throw new Error(`Expected the 8th item of the RLP encoded transaction to be an item but it was a list.`)
-			const r = bytesToBigint(decoded[7])
-			const s = bytesToBigint(decoded[8])
-			const isSigned = r !== 0n || s !== 0n
-			if (!isSigned) return decodeTransaction155(transaction)
-			return decodeTransactionLegacy(transaction)
+			if (encodedTransaction[0]! < 0xc0) throw new Error(`Expected an encoded transaction but first byte is not an expected transaction type or legacy transaction RLP byte.`)
+			if (isEncodedTransaction155(encodedTransaction)) return decodeTransaction155(encodedTransaction)
+			else return decodeTransactionLegacy(encodedTransaction)
 		}
 	}
+}
+
+export function encodeNumberForRlp(value: bigint) {
+	if (value === 0n) return new Uint8Array(0)
+	return bigintToBytes(value)
+}
+export function encodeAddressForRlp(value: bigint) {
+	return bigintToBytes(value, 20)
+}
+export function encodeHashForRlp(value: bigint) {
+	return bigintToBytes(value, 32)
 }
