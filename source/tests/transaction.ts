@@ -1,9 +1,13 @@
 import { describe, should } from 'micro-should'
 import { testCases as ethersTestCases } from './ethers-transactions.js'
 import { testCases as ethers1559TestCases } from './ethers-eip1559.js'
-import { Transaction1559Unsigned, Transaction155Unsigned, Transaction2930Unsigned, TransactionLegacyUnsigned, decodeTransaction, encodeTransaction } from '../transaction.js'
+import { Transaction1559Unsigned, Transaction155Unsigned, Transaction2930Unsigned, TransactionLegacySigned, TransactionLegacyUnsigned, decodeTransaction, encodeTransaction, signTransaction } from '../transaction.js'
 import { addressHexToBigint, hexToBigint, hexToBytes } from '../converters.js'
 import { assertEqual } from './utils.js'
+
+// TODO: implement tests for signed transactions for all transaction types (legacy done)
+// TODO: incorperate ethers-v6-transactions test vectors
+// TODO: incorperate eip-155 test vectors
 
 describe('encode', () => {
 	describe('legacy', () => {
@@ -21,6 +25,31 @@ describe('encode', () => {
 					}
 					const expectedRlpBytes = hexToBytes(testCase.unsignedTransaction)
 					const actualRlpBytes = encodeTransaction(transaction)
+					assertEqual(expectedRlpBytes, actualRlpBytes)
+				})
+			}
+		})
+		describe('signed', () => {
+			for (const testCase of ethersTestCases) {
+				should(testCase.name, async () => {
+					const unsigned: TransactionLegacyUnsigned = {
+						type: 'legacy',
+						to: testCase.to !== undefined ? BigInt(testCase.to) : null,
+						data: hexToBytes(testCase.data ?? '0x'),
+						gasLimit: hexToBigint(testCase.gasLimit ?? '0x0'),
+						gasPrice: hexToBigint(testCase.gasPrice ?? '0x0'),
+						nonce: hexToBigint(testCase.nonce ?? '0x0'),
+						value: hexToBigint(testCase.value ?? '0x0'),
+					}
+					const signed = await signTransaction(unsigned, BigInt(testCase.privateKey))
+					const testTransaction: TransactionLegacySigned = {
+						...unsigned,
+						v: signed.v,
+						r: signed.r,
+						s: signed.s,
+					}
+					const expectedRlpBytes = hexToBytes(testCase.signedTransaction)
+					const actualRlpBytes = encodeTransaction(testTransaction)
 					assertEqual(expectedRlpBytes, actualRlpBytes)
 				})
 			}

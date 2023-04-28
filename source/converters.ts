@@ -31,7 +31,7 @@ export function bytesToHex(value: Uint8Array): `0x${string}` {
 }
 
 export function bigintToHex(value: bigint, numberOfBytes?: number): `0x${string}` {
-	return `0x${value.toString(16).padStart(numberOfBytes ?? 0, '0')}`
+	return `0x${value.toString(16).padStart((numberOfBytes ?? 0) * 2, '0')}`
 }
 
 export function hexToBigint(value: string) {

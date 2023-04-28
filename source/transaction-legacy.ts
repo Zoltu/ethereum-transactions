@@ -1,4 +1,6 @@
 import { RlpItem, rlpDecode, rlpEncode } from "@zoltu/rlp-encoder"
+import { signAsync } from '@noble/secp256k1'
+import { keccak_256 } from '@noble/hashes/sha3'
 import { addressBigintToHex, bigintToHex, bytesToBigint, bytesToHex, hexToBigint, hexToBytes } from "./converters.js"
 import { isArray } from "./typescript.js"
 import { encodeAddressForRlp, encodeNumberForRlp } from "./transaction.js"
@@ -35,6 +37,46 @@ export type JsonTransactionLegacySigned = JsonTransactionLegacyUnsigned & {
 }
 export type JsonTransactionLegacy = JsonTransactionLegacyUnsigned | JsonTransactionLegacySigned
 
+export function isSignedLegacy(transaction: JsonTransactionLegacy): transaction is JsonTransactionLegacySigned
+export function isSignedLegacy(transaction: TransactionLegacy): transaction is TransactionLegacySigned
+export function isSignedLegacy(transaction: JsonTransactionLegacy | TransactionLegacy): transaction is JsonTransactionLegacySigned | TransactionLegacySigned {
+	if (!('v' in transaction)) return false
+	if (!('r' in transaction)) return false
+	if (!('s' in transaction)) return false
+	if (typeof transaction.v === 'string') {
+		if (typeof transaction.r !== 'string') return false
+		if (typeof transaction.s !== 'string') return false
+		return true
+	} else if (typeof transaction.v === 'bigint') {
+		if (typeof transaction.r !== 'bigint') return false
+		if (typeof transaction.s !== 'bigint') return false
+		return true
+	} else {
+		return false
+	}
+}
+
+export async function signLegacy(transaction: TransactionLegacy, privateKey: bigint): Promise<TransactionLegacySigned> {
+	if (isSignedLegacy(transaction)) return transaction
+	const encoded = encodeTransactionLegacy(transaction)
+	const hash = keccak_256(encoded)
+	// hacky private key converting necessary until https://github.com/paulmillr/noble-secp256k1/pull/102 is merged
+	const signature = await signAsync(hash, privateKey.toString(16).padStart(64, '0'))
+	return {
+		type: 'legacy',
+		nonce: transaction.nonce,
+		gasPrice: transaction.gasPrice,
+		gasLimit: transaction.gasLimit,
+		to: transaction.to,
+		value: transaction.value,
+		data: transaction.data,
+		// not null assertion necessary until https://github.com/paulmillr/noble-secp256k1/pull/101 is merged
+		v: BigInt(signature.recovery!) + 27n,
+		r: signature.r,
+		s: signature.s,
+	}
+}
+
 export function serializeTransactionLegacy(transaction: TransactionLegacyUnsigned): JsonTransactionLegacyUnsigned
 export function serializeTransactionLegacy(transaction: TransactionLegacySigned): JsonTransactionLegacySigned
 export function serializeTransactionLegacy(transaction: TransactionLegacy): JsonTransactionLegacy
@@ -47,7 +89,7 @@ export function serializeTransactionLegacy(transaction: TransactionLegacy): Json
 		to: transaction.to === null ? null : addressBigintToHex(transaction.to),
 		value: bigintToHex(transaction.value),
 		data: bytesToHex(transaction.data),
-		...isSigned(transaction) ? {
+		...isSignedLegacy(transaction) ? {
 			v: bigintToHex(transaction.v),
 			r: bigintToHex(transaction.r),
 			s: bigintToHex(transaction.s),
@@ -67,7 +109,7 @@ export function deserializeTransactionLegacy(transaction: JsonTransactionLegacy)
 		to: transaction.to === null ? null : hexToBigint(transaction.to),
 		value: hexToBigint(transaction.value),
 		data: hexToBytes(transaction.data),
-		...isSigned(transaction) ? {
+		...isSignedLegacy(transaction) ? {
 			v: hexToBigint(transaction.v),
 			r: hexToBigint(transaction.r),
 			s: hexToBigint(transaction.s),
@@ -83,7 +125,7 @@ export function encodeTransactionLegacy(transaction: TransactionLegacy): Uint8Ar
 		transaction.to !== null ? encodeAddressForRlp(transaction.to) : new Uint8Array(0),
 		encodeNumberForRlp(transaction.value),
 		transaction.data,
-		...isSigned(transaction) ? [
+		...isSignedLegacy(transaction) ? [
 			encodeNumberForRlp(transaction.v),
 			encodeNumberForRlp(transaction.r),
 			encodeNumberForRlp(transaction.s),
@@ -119,24 +161,5 @@ export function decodeTransactionLegacy(encoded: Uint8Array): TransactionLegacy 
 			r: bytesToBigint(decoded[7]),
 			s: bytesToBigint(decoded[8]),
 		} : {}
-	}
-}
-
-function isSigned(transaction: JsonTransactionLegacy): transaction is JsonTransactionLegacySigned
-function isSigned(transaction: TransactionLegacy): transaction is TransactionLegacySigned
-function isSigned(transaction: JsonTransactionLegacy | TransactionLegacy): transaction is JsonTransactionLegacySigned | TransactionLegacySigned {
-	if (!('v' in transaction)) return false
-	if (!('r' in transaction)) return false
-	if (!('s' in transaction)) return false
-	if (typeof transaction.v === 'string') {
-		if (typeof transaction.r !== 'string') return false
-		if (typeof transaction.s !== 'string') return false
-		return true
-	} else if (typeof transaction.v === 'bigint') {
-		if (typeof transaction.r === 'bigint') return false
-		if (typeof transaction.s === 'bigint') return false
-		return true
-	} else {
-		return false
 	}
 }

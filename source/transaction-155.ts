@@ -1,4 +1,6 @@
 import { RlpItem, rlpDecode, rlpEncode } from "@zoltu/rlp-encoder"
+import { keccak_256 } from "@noble/hashes/sha3"
+import { signAsync } from "@noble/secp256k1"
 import { addressBigintToHex, bigintToHex, bytesToBigint, bytesToHex, hexToBigint, hexToBytes } from "./converters.js"
 import { isArray } from "./typescript.js"
 import { encodeAddressForRlp, encodeNumberForRlp } from "./transaction.js"
@@ -37,6 +39,46 @@ export type JsonTransaction155Signed = JsonTransaction155Unsigned & {
 }
 export type JsonTransaction155 = JsonTransaction155Unsigned | JsonTransaction155Signed
 
+export function isSigned155(transaction: JsonTransaction155): transaction is JsonTransaction155Signed
+export function isSigned155(transaction: Transaction155): transaction is Transaction155Signed
+export function isSigned155(transaction: JsonTransaction155 | Transaction155): transaction is JsonTransaction155Signed | Transaction155Signed {
+	if (!('v' in transaction)) return false
+	if (!('r' in transaction)) return false
+	if (!('s' in transaction)) return false
+	if (typeof transaction.v === 'string') {
+		if (typeof transaction.r !== 'string') return false
+		if (typeof transaction.s !== 'string') return false
+		return true
+	} else if (typeof transaction.v === 'bigint') {
+		if (typeof transaction.r !== 'bigint') return false
+		if (typeof transaction.s !== 'bigint') return false
+		return true
+	} else {
+		return false
+	}
+}
+
+export async function sign155(transaction: Transaction155, privateKey: bigint): Promise<Transaction155Signed> {
+	if (isSigned155(transaction)) return transaction
+	const encoded = encodeTransaction155(transaction)
+	const hash = keccak_256(encoded)
+	const signature = await signAsync(hash, privateKey.toString(16).padStart(64, '0'))
+	return {
+		type: '155',
+		nonce: transaction.nonce,
+		gasPrice: transaction.gasPrice,
+		gasLimit: transaction.gasLimit,
+		to: transaction.to,
+		value: transaction.value,
+		data: transaction.data,
+		chainId: transaction.chainId,
+		// not null assertion necessary until https://github.com/paulmillr/noble-secp256k1/pull/101 is merged
+		v: BigInt(signature.recovery!) + 35n + 2n * transaction.chainId,
+		r: signature.r,
+		s: signature.s,
+	}
+}
+
 export function serializeTransaction155(transaction: Transaction155Unsigned): JsonTransaction155Unsigned
 export function serializeTransaction155(transaction: Transaction155Signed): JsonTransaction155Signed
 export function serializeTransaction155(transaction: Transaction155): JsonTransaction155
@@ -50,7 +92,7 @@ export function serializeTransaction155(transaction: Transaction155): JsonTransa
 		to: transaction.to === null ? null : addressBigintToHex(transaction.to),
 		value: bigintToHex(transaction.value),
 		data: bytesToHex(transaction.data),
-		...isSigned(transaction) ? {
+		...isSigned155(transaction) ? {
 			v: bigintToHex(transaction.v),
 			r: bigintToHex(transaction.r),
 			s: bigintToHex(transaction.s),
@@ -71,7 +113,7 @@ export function deserializeTransaction155(transaction: JsonTransaction155): Tran
 		to: transaction.to === null ? null : hexToBigint(transaction.to),
 		value: hexToBigint(transaction.value),
 		data: hexToBytes(transaction.data),
-		...isSigned(transaction) ? {
+		...isSigned155(transaction) ? {
 			v: hexToBigint(transaction.v),
 			r: hexToBigint(transaction.r),
 			s: hexToBigint(transaction.s),
@@ -87,7 +129,7 @@ export function encodeTransaction155(transaction: Transaction155): Uint8Array {
 		transaction.to !== null ? encodeAddressForRlp(transaction.to) : new Uint8Array(0),
 		encodeNumberForRlp(transaction.value),
 		transaction.data,
-		...isSigned(transaction) ? [
+		...isSigned155(transaction) ? [
 			encodeNumberForRlp(transaction.v),
 			encodeNumberForRlp(transaction.r),
 			encodeNumberForRlp(transaction.s),
@@ -131,41 +173,22 @@ export function decodeTransaction155(encoded: Uint8Array): Transaction155 {
 }
 
 export function isEncodedTransaction155(encodedTransaction: Uint8Array): boolean {
-	// possibilities: unsigned_legacy + signed_legacy + unsigned_155 + signed_155 + typed_transaction
+	// possibilities: unsigned_155 + signed_155 + unsigned_155 + signed_155 + typed_transaction
 	if (encodedTransaction.length === 0 || encodedTransaction[0]! < 0xc0) return false
-	// possibilities: unsigned_legacy + signed_legacy + unsigned_155 + signed_155
+	// possibilities: unsigned_155 + signed_155 + unsigned_155 + signed_155
 	const decoded = rlpDecode(encodedTransaction)
 	if (!isArray(decoded)) throw new Error(`Expected an RLP encoded list but got a single RLP encoded item.`)
 	if (decoded.length !== 9) return false
-	// possibilities: signed_legacy + unsigned_155 + signed_155
+	// possibilities: signed_155 + unsigned_155 + signed_155
 	if (!(decoded[7] instanceof Uint8Array)) throw new Error(`Expected the 7th item of the RLP encoded transaction to be an item but it was a list.`)
 	if (!(decoded[8] instanceof Uint8Array)) throw new Error(`Expected the 8th item of the RLP encoded transaction to be an item but it was a list.`)
 	const r = bytesToBigint(decoded[7])
 	const s = bytesToBigint(decoded[8])
 	if (r === 0n && s === 0n) return true
-	// possibilities: signed_legacy + signed_155
+	// possibilities: signed_155 + signed_155
 	if (!(decoded[6] instanceof Uint8Array)) throw new Error(`Expected the 7th item of the RLP encoded transaction to be an item but it was a list.`)
 	const v = bytesToBigint(decoded[6])
 	if (v >= 35) return true
-	// possibilities: signed_legacy
+	// possibilities: signed_155
 	return false
-}
-
-function isSigned(transaction: JsonTransaction155): transaction is JsonTransaction155Signed
-function isSigned(transaction: Transaction155): transaction is Transaction155Signed
-function isSigned(transaction: JsonTransaction155 | Transaction155): transaction is JsonTransaction155Signed | Transaction155Signed {
-	if (!('v' in transaction)) return false
-	if (!('r' in transaction)) return false
-	if (!('s' in transaction)) return false
-	if (typeof transaction.v === 'string') {
-		if (typeof transaction.r !== 'string') return false
-		if (typeof transaction.s !== 'string') return false
-		return true
-	} else if (typeof transaction.v === 'bigint') {
-		if (typeof transaction.r === 'bigint') return false
-		if (typeof transaction.s === 'bigint') return false
-		return true
-	} else {
-		return false
-	}
 }

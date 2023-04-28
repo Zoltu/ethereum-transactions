@@ -1,3 +1,8 @@
+// @ts-ignore
+import { webcrypto } from 'node:crypto'
+// @ts-ignore
+if (!globalThis.crypto) globalThis.crypto = webcrypto
+
 import { describe, should } from 'micro-should'
 import './converters.js'
 import './transaction.js'

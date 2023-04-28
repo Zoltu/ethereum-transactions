@@ -1,14 +1,14 @@
-import { hexToBytes } from "../converters.js"
+import { bytesToHex, hexToBytes } from "../converters.js"
 
 export function assertEqual(expected: unknown, actual: unknown): void {
 	if (typeof expected !== typeof actual) throw new Error(`Equality check failed on types.\nExpected type: ${typeof expected}\nActual type  : ${typeof actual}`)
 	if (expected instanceof Uint8Array) {
 		if (!(actual instanceof Uint8Array)) throw new Error(`Equality check on Uint8Array type failed.\nExpected: Uint8Array\nActual  : ${typeof actual}.`)
-		return assertEqual(Array.from(expected), Array.from(actual))
+		if (bytesToHex(expected) !== bytesToHex(actual)) throw new Error(`Equality check on Uint8Array failed.\nExpected: Uint8Array'${bytesToHex(expected)}'\nActual  : Uint8Array'${bytesToHex(actual)}'`)
 	}
 	if (Array.isArray(expected)) {
 		if (!Array.isArray(actual)) throw new Error(`Equality check on array type failed.\nExpected ${actual} to be an array.`)
-		if (expected.length !== actual.length) throw new Error()
+		if (expected.length !== actual.length) throw new Error(`Equality check on array length failed.\nExpected ${jsonStringify(expected)}\nActual  : ${jsonStringify(actual)}`)
 		for (let i = 0; i < expected.length; ++i) {
 			if (typeof expected[i] === 'object' && typeof expected[i] !== null) assertEqual(expected[i], actual[i])
 			if (expected[i] !== actual[i]) throw new Error(`Equality check of array elements failed.\nExpected: ${jsonStringify(expected)}\nActual  : ${jsonStringify(actual)}`)

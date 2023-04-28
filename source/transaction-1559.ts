@@ -1,4 +1,6 @@
 import { RlpItem, rlpDecode, rlpEncode } from "@zoltu/rlp-encoder"
+import { keccak_256 } from "@noble/hashes/sha3"
+import { signAsync } from "@noble/secp256k1"
 import { addressBigintToHex, bigintToHex, bytesToBigint, bytesToHex, hexToBigint, hexToBytes } from "./converters.js"
 import { isArray } from "./typescript.js"
 import { encodeAddressForRlp, encodeHashForRlp, encodeNumberForRlp } from "./transaction.js"
@@ -41,6 +43,48 @@ export type JsonTransaction1559Signed = JsonTransaction1559Unsigned & {
 }
 export type JsonTransaction1559 = JsonTransaction1559Unsigned | JsonTransaction1559Signed
 
+export function isSigned1559(transaction: JsonTransaction1559): transaction is JsonTransaction1559Signed
+export function isSigned1559(transaction: Transaction1559): transaction is Transaction1559Signed
+export function isSigned1559(transaction: JsonTransaction1559 | Transaction1559): transaction is JsonTransaction1559Signed | Transaction1559Signed {
+	if (!('yParity' in transaction)) return false
+	if (!('r' in transaction)) return false
+	if (!('s' in transaction)) return false
+	if (typeof transaction.yParity === 'string') {
+		if (typeof transaction.r !== 'string') return false
+		if (typeof transaction.s !== 'string') return false
+		return true
+	} else if (typeof transaction.yParity === 'bigint') {
+		if (typeof transaction.r !== 'bigint') return false
+		if (typeof transaction.s !== 'bigint') return false
+		return true
+	} else {
+		return false
+	}
+}
+
+export async function sign1559(transaction: Transaction1559, privateKey: bigint): Promise<Transaction1559Signed> {
+	if (isSigned1559(transaction)) return transaction
+	const encoded = encodeTransaction1559(transaction)
+	const hash = keccak_256(encoded)
+	const signature = await signAsync(hash, privateKey.toString(16).padStart(64, '0'))
+	return {
+		type: '1559',
+		chainId: transaction.chainId,
+		nonce: transaction.nonce,
+		maxPriorityFeePerGas: transaction.maxPriorityFeePerGas,
+		maxFeePerGas: transaction.maxFeePerGas,
+		gasLimit: transaction.gasLimit,
+		to: transaction.to,
+		value: transaction.value,
+		data: transaction.data,
+		accessList: transaction.accessList,
+		// not null assertion necessary until https://github.com/paulmillr/noble-secp256k1/pull/101 is merged
+		yParity: BigInt(signature.recovery!),
+		r: signature.r,
+		s: signature.s,
+	}
+}
+
 export function serializeTransaction1559(transaction: Transaction1559Unsigned): JsonTransaction1559Unsigned
 export function serializeTransaction1559(transaction: Transaction1559Signed): JsonTransaction1559Signed
 export function serializeTransaction1559(transaction: Transaction1559): JsonTransaction1559
@@ -56,7 +100,7 @@ export function serializeTransaction1559(transaction: Transaction1559): JsonTran
 		value: bigintToHex(transaction.value),
 		data: bytesToHex(transaction.data),
 		accessList: transaction.accessList.map(([address, storageKeys]) => [addressBigintToHex(address), storageKeys.map(slot => bigintToHex(slot, 32))]),
-		...isSigned(transaction) ? {
+		...isSigned1559(transaction) ? {
 			yParity: bigintToHex(transaction.yParity),
 			r: bigintToHex(transaction.r),
 			s: bigintToHex(transaction.s),
@@ -79,7 +123,7 @@ export function deserializeTransaction1559(transaction: JsonTransaction1559): Tr
 		value: hexToBigint(transaction.value),
 		data: hexToBytes(transaction.data),
 		accessList: transaction.accessList.map(x => [hexToBigint(x[0]), x[1].map(y => hexToBigint(y))]),
-		...isSigned(transaction) ? {
+		...isSigned1559(transaction) ? {
 			yParity: hexToBigint(transaction.yParity),
 			r: hexToBigint(transaction.r),
 			s: hexToBigint(transaction.s),
@@ -98,7 +142,7 @@ export function encodeTransaction1559(transaction: Transaction1559): Uint8Array 
 		encodeNumberForRlp(transaction.value),
 		transaction.data,
 		transaction.accessList.map(([address, storageKeys]) => [encodeAddressForRlp(address), storageKeys.map(slot => encodeHashForRlp(slot))]),
-		...isSigned(transaction) ? [
+		...isSigned1559(transaction) ? [
 			encodeNumberForRlp(transaction.yParity),
 			encodeNumberForRlp(transaction.r),
 			encodeNumberForRlp(transaction.s),
@@ -140,24 +184,5 @@ export function decodeTransaction1559(encoded: Uint8Array): Transaction1559 {
 			r: bytesToBigint(decoded[10]),
 			s: bytesToBigint(decoded[11]),
 		} : {}
-	}
-}
-
-function isSigned(transaction: JsonTransaction1559): transaction is JsonTransaction1559Signed
-function isSigned(transaction: Transaction1559): transaction is Transaction1559Signed
-function isSigned(transaction: JsonTransaction1559 | Transaction1559): transaction is JsonTransaction1559Signed | Transaction1559Signed {
-	if (!('yParity' in transaction)) return false
-	if (!('r' in transaction)) return false
-	if (!('s' in transaction)) return false
-	if (typeof transaction.yParity === 'string') {
-		if (typeof transaction.r !== 'string') return false
-		if (typeof transaction.s !== 'string') return false
-		return true
-	} else if (typeof transaction.yParity === 'bigint') {
-		if (typeof transaction.r === 'bigint') return false
-		if (typeof transaction.s === 'bigint') return false
-		return true
-	} else {
-		return false
 	}
 }

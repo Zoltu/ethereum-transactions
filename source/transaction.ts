@@ -1,8 +1,8 @@
 import { bigintToBytes } from './converters.js'
-import { JsonTransaction155, Transaction155, decodeTransaction155, deserializeTransaction155, encodeTransaction155, isEncodedTransaction155, serializeTransaction155 } from './transaction-155.js'
-import { JsonTransaction1559, Transaction1559, decodeTransaction1559, deserializeTransaction1559, encodeTransaction1559, serializeTransaction1559 } from './transaction-1559.js'
-import { JsonTransaction2930, Transaction2930, decodeTransaction2930, deserializeTransaction2930, encodeTransaction2930, serializeTransaction2930 } from './transaction-2930.js'
-import { JsonTransactionLegacy, TransactionLegacy, decodeTransactionLegacy, deserializeTransactionLegacy, encodeTransactionLegacy, serializeTransactionLegacy } from './transaction-legacy.js'
+import { JsonTransaction155, Transaction155, Transaction155Signed, decodeTransaction155, deserializeTransaction155, encodeTransaction155, isEncodedTransaction155, isSigned155, serializeTransaction155, sign155 } from './transaction-155.js'
+import { JsonTransaction1559, Transaction1559, Transaction1559Signed, decodeTransaction1559, deserializeTransaction1559, encodeTransaction1559, isSigned1559, serializeTransaction1559, sign1559 } from './transaction-1559.js'
+import { JsonTransaction2930, Transaction2930, Transaction2930Signed, decodeTransaction2930, deserializeTransaction2930, encodeTransaction2930, isSigned2930, serializeTransaction2930, sign2930 } from './transaction-2930.js'
+import { JsonTransactionLegacy, TransactionLegacy, TransactionLegacySigned, decodeTransactionLegacy, deserializeTransactionLegacy, encodeTransactionLegacy, isSignedLegacy, serializeTransactionLegacy, signLegacy } from './transaction-legacy.js'
 import { DistributedOmit, assertNever } from './typescript.js'
 
 export * from './transaction-legacy.js'
@@ -10,6 +10,7 @@ export * from './transaction-155.js'
 export * from './transaction-2930.js'
 export * from './transaction-1559.js'
 
+export type TransactionSigned = TransactionLegacySigned | Transaction155Signed | Transaction2930Signed | Transaction1559Signed
 export type Transaction = TransactionLegacy | Transaction155 | Transaction2930 | Transaction1559
 export type JsonTransaction = JsonTransactionLegacy | JsonTransaction155 | JsonTransaction2930 | JsonTransaction1559
 
@@ -59,6 +60,29 @@ export function deserializeTransaction(transaction: DistributedOmit<JsonTransact
 		case '2930': return deserializeTransaction2930(typedTransaction)
 		case '1559': return deserializeTransaction1559(typedTransaction)
 		default: assertNever(typedTransaction)
+	}
+}
+
+export function isSigned(transaction: Transaction): transaction is TransactionSigned {
+	switch (transaction.type) {
+		case 'legacy': return isSignedLegacy(transaction)
+		case '155': return isSigned155(transaction)
+		case '2930': return isSigned2930(transaction)
+		case '1559': return isSigned1559(transaction)
+	}
+}
+
+export function signTransaction(transaction: TransactionLegacy, privateKey: bigint): Promise<TransactionLegacySigned>
+export function signTransaction(transaction: Transaction155, privateKey: bigint): Promise<Transaction155Signed>
+export function signTransaction(transaction: Transaction2930, privateKey: bigint): Promise<Transaction2930Signed>
+export function signTransaction(transaction: Transaction1559, privateKey: bigint): Promise<Transaction1559Signed>
+export function signTransaction(transaction: Transaction, privateKey: bigint): Promise<TransactionSigned>
+export function signTransaction(transaction: Transaction, privateKey: bigint): Promise<TransactionSigned> {
+	switch (transaction.type) {
+		case 'legacy': return signLegacy(transaction, privateKey)
+		case '155': return sign155(transaction, privateKey)
+		case '2930': return sign2930(transaction, privateKey)
+		case '1559': return sign1559(transaction, privateKey)
 	}
 }
 
