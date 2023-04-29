@@ -65,13 +65,13 @@ export async function sign155(transaction: Transaction155, privateKey: bigint): 
 	const signature = await signAsync(hash, privateKey.toString(16).padStart(64, '0'))
 	return {
 		type: '155',
+		chainId: transaction.chainId,
 		nonce: transaction.nonce,
 		gasPrice: transaction.gasPrice,
 		gasLimit: transaction.gasLimit,
 		to: transaction.to,
 		value: transaction.value,
 		data: transaction.data,
-		chainId: transaction.chainId,
 		// not null assertion necessary until https://github.com/paulmillr/noble-secp256k1/pull/101 is merged
 		v: BigInt(signature.recovery!) + 35n + 2n * transaction.chainId,
 		r: signature.r,

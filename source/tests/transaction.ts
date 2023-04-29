@@ -1,216 +1,101 @@
 import { describe, should } from 'micro-should'
-import { testCases as ethersTestCases } from './ethers-transactions.js'
-import { testCases as ethers1559TestCases } from './ethers-eip1559.js'
-import { Transaction1559Unsigned, Transaction155Unsigned, Transaction2930Unsigned, TransactionLegacySigned, TransactionLegacyUnsigned, decodeTransaction, encodeTransaction, signTransaction } from '../transaction.js'
+import { testCases } from './ethers-transactions.js'
+import { Transaction, Transaction1559Unsigned, Transaction155Unsigned, Transaction2930Unsigned, TransactionLegacyUnsigned, decodeTransaction, encodeTransaction, signTransaction } from '../transaction.js'
 import { addressHexToBigint, hexToBigint, hexToBytes } from '../converters.js'
 import { assertEqual } from './utils.js'
 
-// TODO: implement tests for signed transactions for all transaction types (legacy done)
-// TODO: incorperate ethers-v6-transactions test vectors
-// TODO: incorperate eip-155 test vectors
+async function test(unsigned: Transaction, privateKey: bigint, unsignedRlp: Uint8Array, signedRlp: Uint8Array) {
+	// sign
+	const signed = await signTransaction(unsigned, privateKey)
 
-describe('encode', () => {
-	describe('legacy', () => {
-		describe('unsigned', () => {
-			for (const testCase of ethersTestCases) {
-				should(testCase.name, () => {
-					const transaction: TransactionLegacyUnsigned = {
-						type: 'legacy',
-						to: testCase.to !== undefined ? BigInt(testCase.to) : null,
-						data: hexToBytes(testCase.data ?? '0x'),
-						gasLimit: hexToBigint(testCase.gasLimit ?? '0x0'),
-						gasPrice: hexToBigint(testCase.gasPrice ?? '0x0'),
-						nonce: hexToBigint(testCase.nonce ?? '0x0'),
-						value: hexToBigint(testCase.value ?? '0x0'),
-					}
-					const expectedRlpBytes = hexToBytes(testCase.unsignedTransaction)
-					const actualRlpBytes = encodeTransaction(transaction)
-					assertEqual(expectedRlpBytes, actualRlpBytes)
-				})
+	// encode unsigned
+	const encodedUnsigned = encodeTransaction(unsigned)
+	assertEqual(unsignedRlp, encodedUnsigned)
+
+	// decode unsigned
+	const decodedUnsigned = decodeTransaction(unsignedRlp)
+	assertEqual(unsigned, decodedUnsigned)
+
+	// encode signed
+	const encodedSigned = encodeTransaction(signed)
+	assertEqual(signedRlp, encodedSigned)
+
+	// decode signed
+	const decodedSigned = decodeTransaction(signedRlp)
+	assertEqual(signed, decodedSigned)
+}
+
+describe('legacy', () => {
+	for (const testCase of testCases) {
+		should(testCase.name, async () => {
+			const unsigned: TransactionLegacyUnsigned = {
+				type: 'legacy',
+				to: testCase.transaction.to !== undefined ? addressHexToBigint(testCase.transaction.to) : null,
+				data: hexToBytes(testCase.transaction.data ?? '0x'),
+				gasLimit: hexToBigint(testCase.transaction.gasLimit ?? '0x0'),
+				gasPrice: hexToBigint(testCase.transaction.gasPrice ?? '0x0'),
+				nonce: BigInt(testCase.transaction.nonce ?? 0),
+				value: hexToBigint(testCase.transaction.value ?? '0x0'),
 			}
+			await test(unsigned, hexToBigint(testCase.privateKey), hexToBytes(testCase.unsignedLegacy), hexToBytes(testCase.signedLegacy))
 		})
-		describe('signed', () => {
-			for (const testCase of ethersTestCases) {
-				should(testCase.name, async () => {
-					const unsigned: TransactionLegacyUnsigned = {
-						type: 'legacy',
-						to: testCase.to !== undefined ? BigInt(testCase.to) : null,
-						data: hexToBytes(testCase.data ?? '0x'),
-						gasLimit: hexToBigint(testCase.gasLimit ?? '0x0'),
-						gasPrice: hexToBigint(testCase.gasPrice ?? '0x0'),
-						nonce: hexToBigint(testCase.nonce ?? '0x0'),
-						value: hexToBigint(testCase.value ?? '0x0'),
-					}
-					const signed = await signTransaction(unsigned, BigInt(testCase.privateKey))
-					const testTransaction: TransactionLegacySigned = {
-						...unsigned,
-						v: signed.v,
-						r: signed.r,
-						s: signed.s,
-					}
-					const expectedRlpBytes = hexToBytes(testCase.signedTransaction)
-					const actualRlpBytes = encodeTransaction(testTransaction)
-					assertEqual(expectedRlpBytes, actualRlpBytes)
-				})
-			}
-		})
-	})
-	describe('155', () => {
-		describe('unsigned', () => {
-			for (const testCase of ethersTestCases) {
-				should(testCase.name, () => {
-					const transaction: Transaction155Unsigned = {
-						type: '155',
-						chainId: 5n,
-						to: testCase.to !== undefined ? BigInt(testCase.to) : null,
-						data: hexToBytes(testCase.data ?? '0x'),
-						gasLimit: hexToBigint(testCase.gasLimit ?? '0x0'),
-						gasPrice: hexToBigint(testCase.gasPrice ?? '0x0'),
-						nonce: hexToBigint(testCase.nonce ?? '0x0'),
-						value: hexToBigint(testCase.value ?? '0x0'),
-					}
-					const expectedRlpBytes = hexToBytes(testCase.unsignedTransactionChainId5)
-					const actualRlpBytes = encodeTransaction(transaction)
-					assertEqual(expectedRlpBytes, actualRlpBytes)
-				})
-			}
-		})
-	})
-	describe('2930', () => {
-		describe('unsigned', () => {
-			for (const testCase of ethers1559TestCases) {
-				const testCaseTransaction = testCase.tx
-				if (testCaseTransaction.type !== 1) continue
-				should(testCase.name, () => {
-					const transaction: Transaction2930Unsigned = {
-						type: '2930',
-						chainId: BigInt(testCaseTransaction.chainId ?? 0),
-						nonce: BigInt(testCaseTransaction.nonce ?? 0),
-						gasPrice: hexToBigint(testCaseTransaction.gasPrice ?? '0x0'),
-						gasLimit: hexToBigint(testCaseTransaction.gasLimit ?? '0x0'),
-						to: testCaseTransaction.to === undefined ? null : addressHexToBigint(testCaseTransaction.to),
-						value: hexToBigint(testCaseTransaction.value ?? '0x0'),
-						data: hexToBytes(testCaseTransaction.data ?? '0x'),
-						accessList: (testCaseTransaction.accessList ?? []).map(tuple => [addressHexToBigint(tuple.address), tuple.storageKeys.map(hexToBigint)]),
-					}
-					const expectedRlpBytes = hexToBytes(testCase.unsigned)
-					const actualRlpBytes = encodeTransaction(transaction)
-					assertEqual(expectedRlpBytes, actualRlpBytes)
-				})
-			}
-		})			
-	})
-	describe('1559', () => {
-		describe('unsigned', () => {
-			for (const testCase of ethers1559TestCases) {
-				const testCaseTransaction = testCase.tx
-				if (testCaseTransaction.type !== 2) continue
-				should(testCase.name, () => {
-					const transaction: Transaction1559Unsigned = {
-						type: '1559',
-						chainId: BigInt(testCaseTransaction.chainId ?? 0),
-						nonce: BigInt(testCaseTransaction.nonce ?? 0),
-						maxPriorityFeePerGas: hexToBigint(testCaseTransaction.maxPriorityFeePerGas ?? '0x0'),
-						maxFeePerGas: hexToBigint(testCaseTransaction.maxFeePerGas ?? '0x0'),
-						gasLimit: hexToBigint(testCaseTransaction.gasLimit ?? '0x0'),
-						to: testCaseTransaction.to === undefined ? null : addressHexToBigint(testCaseTransaction.to),
-						value: hexToBigint(testCaseTransaction.value ?? '0x0'),
-						data: hexToBytes(testCaseTransaction.data ?? '0x'),
-						accessList: (testCaseTransaction.accessList ?? []).map(tuple => [addressHexToBigint(tuple.address), tuple.storageKeys.map(hexToBigint)]),
-					}
-					const expectedRlpBytes = hexToBytes(testCase.unsigned)
-					const actualRlpBytes = encodeTransaction(transaction)
-					assertEqual(expectedRlpBytes, actualRlpBytes)
-				})
-			}
-		})			
-	})
+	}
 })
-describe('decode', () => {
-	describe('legacy', () => {
-		describe('unsigned', () => {
-			for (const testCase of ethersTestCases) {
-				should(testCase.name, () => {
-					const expectedTransaction: TransactionLegacyUnsigned = {
-						type: 'legacy',
-						to: testCase.to !== undefined ? BigInt(testCase.to) : null,
-						data: hexToBytes(testCase.data ?? '0x'),
-						gasLimit: hexToBigint(testCase.gasLimit ?? '0x0'),
-						gasPrice: hexToBigint(testCase.gasPrice ?? '0x0'),
-						nonce: hexToBigint(testCase.nonce ?? '0x0'),
-						value: hexToBigint(testCase.value ?? '0x0'),
-					}
-					const actualTransaction = decodeTransaction(hexToBytes(testCase.unsignedTransaction))
-					assertEqual(expectedTransaction, actualTransaction)
-				})
+describe('155', () => {
+	for (const testCase of testCases) {
+		// https://github.com/ethereumjs/ethereumjs-monorepo/pull/2671
+		const chainId = testCase.transaction.chainId
+		if (chainId === undefined || chainId === null || chainId === '' || chainId === '0x' || BigInt(chainId) === 0n) continue
+
+		should(testCase.name, async () => {
+			const unsigned: Transaction155Unsigned = {
+				type: '155',
+				chainId: hexToBigint(testCase.transaction.chainId ?? '0x0'),
+				to: testCase.transaction.to !== undefined ? addressHexToBigint(testCase.transaction.to) : null,
+				data: hexToBytes(testCase.transaction.data ?? '0x'),
+				gasLimit: hexToBigint(testCase.transaction.gasLimit ?? '0x0'),
+				gasPrice: hexToBigint(testCase.transaction.gasPrice ?? '0x0'),
+				nonce: BigInt(testCase.transaction.nonce ?? 0),
+				value: hexToBigint(testCase.transaction.value ?? '0x0'),
 			}
+			await test(unsigned, hexToBigint(testCase.privateKey), hexToBytes(testCase.unsignedEip155), hexToBytes(testCase.signedEip155))
 		})
-	})
-	describe('155', () => {
-		describe('unsigned', () => {
-			for (const testCase of ethersTestCases) {
-				should(testCase.name, () => {
-					const expectedTransaction: Transaction155Unsigned = {
-						type: '155',
-						chainId: 5n,
-						to: testCase.to !== undefined ? BigInt(testCase.to) : null,
-						data: hexToBytes(testCase.data ?? '0x'),
-						gasLimit: hexToBigint(testCase.gasLimit ?? '0x0'),
-						gasPrice: hexToBigint(testCase.gasPrice ?? '0x0'),
-						nonce: hexToBigint(testCase.nonce ?? '0x0'),
-						value: hexToBigint(testCase.value ?? '0x0'),
-					}
-					const actualTransaction = decodeTransaction(hexToBytes(testCase.unsignedTransactionChainId5))
-					assertEqual(expectedTransaction, actualTransaction)
-				})
+	}
+})
+describe('2930', () => {
+	for (const testCase of testCases) {
+		should(testCase.name, async () => {
+			const unsigned: Transaction2930Unsigned = {
+				type: '2930',
+				chainId: hexToBigint(testCase.transaction.chainId ?? '0x1'),
+				to: testCase.transaction.to !== undefined ? addressHexToBigint(testCase.transaction.to) : null,
+				data: hexToBytes(testCase.transaction.data ?? '0x'),
+				gasLimit: hexToBigint(testCase.transaction.gasLimit ?? '0x0'),
+				gasPrice: hexToBigint(testCase.transaction.gasPrice ?? '0x0'),
+				nonce: BigInt(testCase.transaction.nonce ?? 0),
+				value: hexToBigint(testCase.transaction.value ?? '0x0'),
+				accessList: (testCase.transaction.accessList ?? []).map(tuple => [addressHexToBigint(tuple.address), tuple.storageKeys.map(hexToBigint)])
 			}
+			await test(unsigned, hexToBigint(testCase.privateKey), hexToBytes(testCase.unsignedBerlin), hexToBytes(testCase.signedBerlin))
 		})
-	})
-	describe('2930', () => {
-		describe('unsigned', () => {
-			for (const testCase of ethers1559TestCases) {
-				const testCaseTransaction = testCase.tx
-				if (testCaseTransaction.type !== 1) continue
-				should(testCase.name, () => {
-					const expectedTransaction: Transaction2930Unsigned = {
-						type: '2930',
-						chainId: BigInt(testCaseTransaction.chainId ?? 0),
-						nonce: BigInt(testCaseTransaction.nonce ?? 0),
-						gasPrice: hexToBigint(testCaseTransaction.gasPrice ?? '0x0'),
-						gasLimit: hexToBigint(testCaseTransaction.gasLimit ?? '0x0'),
-						to: testCaseTransaction.to === undefined ? null : addressHexToBigint(testCaseTransaction.to),
-						value: hexToBigint(testCaseTransaction.value ?? '0x0'),
-						data: hexToBytes(testCaseTransaction.data ?? '0x'),
-						accessList: (testCaseTransaction.accessList ?? []).map(tuple => [addressHexToBigint(tuple.address), tuple.storageKeys.map(hexToBigint)]),
-					}
-					const actualTransaction = decodeTransaction(hexToBytes(testCase.unsigned))
-					assertEqual(expectedTransaction, actualTransaction)
-				})
+	}
+})
+describe('1559', () => {
+	for (const testCase of testCases) {
+		should(testCase.name, async () => {
+			const unsigned: Transaction1559Unsigned = {
+				type: '1559',
+				chainId: hexToBigint(testCase.transaction.chainId ?? '0x1'),
+				to: testCase.transaction.to !== undefined ? addressHexToBigint(testCase.transaction.to) : null,
+				data: hexToBytes(testCase.transaction.data ?? '0x'),
+				gasLimit: hexToBigint(testCase.transaction.gasLimit ?? '0x0'),
+				maxPriorityFeePerGas: hexToBigint(testCase.transaction.maxPriorityFeePerGas ?? '0x0'),
+				maxFeePerGas: hexToBigint(testCase.transaction.maxFeePerGas ?? '0x0'),
+				nonce: BigInt(testCase.transaction.nonce ?? 0),
+				value: hexToBigint(testCase.transaction.value ?? '0x0'),
+				accessList: (testCase.transaction.accessList ?? []).map(tuple => [addressHexToBigint(tuple.address), tuple.storageKeys.map(hexToBigint)])
 			}
+			await test(unsigned, hexToBigint(testCase.privateKey), hexToBytes(testCase.unsignedLondon), hexToBytes(testCase.signedLondon))
 		})
-	})
-	describe('1559', () => {
-		describe('unsigned', () => {
-			for (const testCase of ethers1559TestCases) {
-				const testCaseTransaction = testCase.tx
-				if (testCaseTransaction.type !== 2) continue
-				should(testCase.name, () => {
-					const expectedTransaction: Transaction1559Unsigned = {
-						type: '1559',
-						chainId: BigInt(testCaseTransaction.chainId ?? 0),
-						nonce: BigInt(testCaseTransaction.nonce ?? 0),
-						maxPriorityFeePerGas: hexToBigint(testCaseTransaction.maxPriorityFeePerGas ?? '0x0'),
-						maxFeePerGas: hexToBigint(testCaseTransaction.maxFeePerGas ?? '0x0'),
-						gasLimit: hexToBigint(testCaseTransaction.gasLimit ?? '0x0'),
-						to: testCaseTransaction.to === undefined ? null : addressHexToBigint(testCaseTransaction.to),
-						value: hexToBigint(testCaseTransaction.value ?? '0x0'),
-						data: hexToBytes(testCaseTransaction.data ?? '0x'),
-						accessList: (testCaseTransaction.accessList ?? []).map(tuple => [addressHexToBigint(tuple.address), tuple.storageKeys.map(hexToBigint)]),
-					}
-					const actualTransaction = decodeTransaction(hexToBytes(testCase.unsigned))
-					assertEqual(expectedTransaction, actualTransaction)
-				})
-			}
-		})
-	})
+	}
 })
