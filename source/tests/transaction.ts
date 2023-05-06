@@ -1,7 +1,11 @@
 import { describe, should } from 'micro-should'
-import { testCases } from './ethers-transactions.js'
-import { Transaction, Transaction1559Unsigned, Transaction155Unsigned, Transaction2930Unsigned, TransactionLegacyUnsigned, decodeTransaction, encodeTransaction, getSigner, isSigned, signTransaction } from '../transaction.js'
 import { addressHexToBigint, bigintToHex, hexToBigint, hexToBytes } from '../converters.js'
+import { Transaction, decodeTransaction, encodeTransaction, getSigner, isSigned, signTransaction } from '../index.js'
+import { TransactionLegacyUnsigned } from '../transaction-legacy.js'
+import { Transaction155Unsigned } from '../transaction-155.js'
+import { Transaction2930Unsigned } from '../transaction-2930.js'
+import { Transaction1559Unsigned } from '../transaction-1559.js'
+import { testCases } from './ethers-transactions.js'
 import { assertEqual } from './utils.js'
 
 async function test(unsigned: Transaction, privateKey: bigint, unsignedRlp: Uint8Array, signedRlp: Uint8Array) {

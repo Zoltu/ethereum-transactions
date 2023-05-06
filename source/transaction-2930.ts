@@ -1,9 +1,8 @@
 import { RlpItem, rlpDecode, rlpEncode } from "@zoltu/rlp-encoder"
 import { keccak_256 } from "@noble/hashes/sha3"
 import { signAsync } from "@noble/secp256k1"
-import { addressBigintToHex, bigintToHex, bytesToBigint, bytesToHex, hexToBigint, hexToBytes } from "./converters.js"
+import { addressBigintToHex, bigintToHex, bytesToBigint, bytesToHex, hexToBigint, hexToBytes, encodeAddressForRlp, encodeHashForRlp, encodeNumberForRlp } from "./converters.js"
 import { isArray } from "./typescript.js"
-import { encodeAddressForRlp, encodeHashForRlp, encodeNumberForRlp } from "./transaction.js"
 
 export type Transaction2930Unsigned = {
 	readonly type: '2930'

@@ -1,14 +1,17 @@
 {
-	"name": "ethereum-transaction-signer",
-	"version": "1.0.0",
+	"name": "@zoltu/ethereum-transactions",
 	"description": "A low dependency library that can encode, decode, and sign Ethereum transactions.",
 	"author": "Micah Zoltu",
 	"license": "Unlicense",
-	"bugs": { "url": "https://github.com/Zoltu/ethereum-transaction-signer/issues" },
-	"homepage": "https://github.com/Zoltu/ethereum-transaction-signer#readme",
+	"bugs": { "url": "https://github.com/Zoltu/ethereum-transactions/issues" },
+	"homepage": "https://github.com/Zoltu/ethereum-transactions#readme",
 	"keywords": [ "ethereum", "transaction" ],
-	"repository": { "type": "git", "url": "git+https://github.com/Zoltu/ethereum-transaction-signer.git" },
+	"repository": { "type": "git", "url": "git+https://github.com/Zoltu/ethereum-transactions.git" },
 	"main": "output/index.js",
+	"exports": {
+		".": "./output/index.js",
+		"./converters.js": "./output/converters.js"
+	},
 	"type": "module",
 	"dependencies": {
 		"@noble/hashes": "1.3.0",

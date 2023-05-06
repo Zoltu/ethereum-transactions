@@ -68,3 +68,14 @@ export function addressHexToBigint(address: string) {
 	if (match === null) throw new Error(`Expected a 40 character hex string with an optional 0x prefix but found: ${address}`)
 	return BigInt(`0x${match.groups!['address']!}`)
 }
+
+export function encodeNumberForRlp(value: bigint) {
+	if (value === 0n) return new Uint8Array(0)
+	return bigintToBytes(value)
+}
+export function encodeAddressForRlp(value: bigint) {
+	return bigintToBytes(value, 20)
+}
+export function encodeHashForRlp(value: bigint) {
+	return bigintToBytes(value, 32)
+}

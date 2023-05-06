@@ -1,16 +1,11 @@
 import { Signature, getPublicKey } from '@noble/secp256k1'
-import { bigintToBytes, bytesToBigint } from './converters.js'
+import { bytesToBigint } from './converters.js'
 import { JsonTransaction155, Transaction155, Transaction155Signed, Transaction155Unsigned, decodeTransaction155, deserializeTransaction155, encodeTransaction155, isEncodedTransaction155, isSigned155, serializeTransaction155, sign155 } from './transaction-155.js'
 import { JsonTransaction1559, Transaction1559, Transaction1559Signed, Transaction1559Unsigned, decodeTransaction1559, deserializeTransaction1559, encodeTransaction1559, isSigned1559, serializeTransaction1559, sign1559 } from './transaction-1559.js'
 import { JsonTransaction2930, Transaction2930, Transaction2930Signed, Transaction2930Unsigned, decodeTransaction2930, deserializeTransaction2930, encodeTransaction2930, isSigned2930, serializeTransaction2930, sign2930 } from './transaction-2930.js'
 import { JsonTransactionLegacy, TransactionLegacy, TransactionLegacySigned, TransactionLegacyUnsigned, decodeTransactionLegacy, deserializeTransactionLegacy, encodeTransactionLegacy, isSignedLegacy, serializeTransactionLegacy, signLegacy } from './transaction-legacy.js'
 import { DistributedOmit, assertNever } from './typescript.js'
 import { keccak_256 } from '@noble/hashes/sha3'
-
-export * from './transaction-legacy.js'
-export * from './transaction-155.js'
-export * from './transaction-2930.js'
-export * from './transaction-1559.js'
 
 export type TransactionSigned = TransactionLegacySigned | Transaction155Signed | Transaction2930Signed | Transaction1559Signed
 export type TransactionUnsigned = TransactionLegacyUnsigned | Transaction155Unsigned | Transaction2930Unsigned | Transaction1559Unsigned
@@ -66,16 +61,7 @@ export function deserializeTransaction(transaction: DistributedOmit<JsonTransact
 	}
 }
 
-export function isSigned(transaction: Transaction): transaction is TransactionSigned {
-	switch (transaction.type) {
-		case 'legacy': return isSignedLegacy(transaction)
-		case '155': return isSigned155(transaction)
-		case '2930': return isSigned2930(transaction)
-		case '1559': return isSigned1559(transaction)
-	}
-}
-
-function publicKeyToAddress(uncompressedPublicKey: Uint8Array): bigint {
+export function publicKeyToAddress(uncompressedPublicKey: Uint8Array): bigint {
 	const addressBytes = keccak_256(uncompressedPublicKey.subarray(1, 65)).slice(12)
 	return bytesToBigint(addressBytes)
 }
@@ -88,6 +74,15 @@ export function getAddress(privateKey: bigint): bigint {
 export function getTransactionHash(transaction: Transaction): bigint {
 	const encoded = encodeTransaction(transaction)
 	return bytesToBigint(keccak_256(encoded))
+}
+
+export function isSigned(transaction: Transaction): transaction is TransactionSigned {
+	switch (transaction.type) {
+		case 'legacy': return isSignedLegacy(transaction)
+		case '155': return isSigned155(transaction)
+		case '2930': return isSigned2930(transaction)
+		case '1559': return isSigned1559(transaction)
+	}
 }
 
 export function getSigner(transaction: TransactionSigned): bigint {
@@ -140,15 +135,4 @@ export function decodeTransaction(encodedTransaction: Uint8Array): Transaction {
 			else return decodeTransactionLegacy(encodedTransaction)
 		}
 	}
-}
-
-export function encodeNumberForRlp(value: bigint) {
-	if (value === 0n) return new Uint8Array(0)
-	return bigintToBytes(value)
-}
-export function encodeAddressForRlp(value: bigint) {
-	return bigintToBytes(value, 20)
-}
-export function encodeHashForRlp(value: bigint) {
-	return bigintToBytes(value, 32)
 }
