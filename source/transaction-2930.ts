@@ -13,7 +13,7 @@ export type Transaction2930Unsigned = {
 	readonly to: bigint | null
 	readonly value: bigint
 	readonly data: Uint8Array
-	readonly accessList: [bigint, bigint[]][]
+	readonly accessList: readonly (readonly [bigint, readonly bigint[]])[]
 }
 export type Transaction2930Signed = Transaction2930Unsigned & {
 	readonly yParity: bigint
@@ -31,7 +31,7 @@ export type JsonTransaction2930Unsigned = {
 	readonly to: string | null
 	readonly value: string
 	readonly data: string
-	readonly accessList: [string, string[]][]
+	readonly accessList: readonly (readonly [string, readonly string[]])[]
 }
 export type JsonTransaction2930Signed = JsonTransaction2930Unsigned & {
 	readonly yParity: string
